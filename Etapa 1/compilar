@@ -1,0 +1,4 @@
+#!/bin/sh -xe
+
+# Exemplo de como compilar código em C, tire a cerquilha para habilitar
+#gcc -Wall servidor.c -o servidor
