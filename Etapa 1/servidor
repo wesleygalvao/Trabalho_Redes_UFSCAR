@@ -1,3 +1,48 @@
 #!/usr/bin/python3
 
 # seu código aqui
+import socket
+
+def recvline(conexao):
+    buffer = ""
+    while True:        
+        data = conexao.recv(1) 
+        buffer+= data.decode()
+        if data == b"\n":
+            return buffer
+        if not data:
+            return
+
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(('', 7000))
+s.listen(5)
+dicionario = {}
+
+conexao, endereco = s.accept() 
+dicionario = {conexao:False}
+while True:                
+  data = recvline(conexao)
+  if not data: break       # stop if client stopped
+  data = data.split()
+  if data[0] == "/nick":
+      if data[1:data.__len__()].count(':') > 0 or data[1:data.__len__()].count(' ')>0:
+          conexao.send(b"/error\n")
+      else:
+          if dicionario[conexao] == False:
+              dicionario[conexao] = data[1:data.__len__()]
+              mensagem = "/joined " + ''.join(dicionario[conexao]) + "\n"
+              conexao.send(mensagem.encode())
+          else:
+              mensagem = "/renamed " + ''.join(dicionario[conexao]) + " "+ ''.join(data[1:data.__len__()]) +"\n"
+              conexao.send(mensagem.encode())
+              dicionario[conexao] = data[1:data.__len__()]
+  else:
+       if dicionario[conexao] == False:
+              conexao.send(b"/error\n")
+       else:
+              mensagem = ''.join(dicionario[conexao]) + ": "+ ''.join(data) +"\n"
+              conexao.send(mensagem.encode())
+conexao.close()               # close the connection
+
