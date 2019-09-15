@@ -1,3 +1,8 @@
+## REFERÊNCIAS PARA O PASSO 4
+# https://pythonprogramming.net/server-chatroom-sockets-tutorial-python-3/
+# https://codinginfinite.com/python-chat-application-tutorial-source-code/
+# https://github.com/mrahulkrishna/simple-chat-room-using-python/blob/master/server.py
+
 #!/usr/bin/python3
 
 # seu código aqui
