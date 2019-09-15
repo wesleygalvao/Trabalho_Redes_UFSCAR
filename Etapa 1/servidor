@@ -1,0 +1,76 @@
+#!/usr/bin/python3
+
+# seu código aqui
+import socket
+import select
+
+
+# Cria um socket 
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+# Habita a opção SO_REUSEADDR
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+# Designa a porta 7000 ao socket e o permite escutá-la
+s.bind(('', 7000))
+s.listen(5)
+# Cria uma lista para sockets
+sockets_lista = [s]
+# Cria uma lista(dicionário) para demais conexões de outros clientes
+#lista_conexoes = {}
+# Socket aceita o pedido de cone
+#conexao, endereco = s.accept() 
+lista_conexoes = {}
+lista_msgs = {}
+# Buffering 
+def recvline(conexao):
+    buffer = ""
+    while True:        
+        data = conexao.recv(1) 
+        buffer+= data.decode()
+        if data == b"\n":
+            return buffer
+        if not data:
+            return
+
+def mensagem_para_todos(mensagem):
+    for sock in lista_conexoes:
+        sock.send(mensagem)
+        
+while True:
+    leitura_sockets, _, _ = select.select(sockets_lista, [], [])
+    for socket_notificado in leitura_sockets:
+
+        if socket_notificado == s:
+            conexao, endereco = s.accept()
+            sockets_lista.append(conexao)    
+            lista_conexoes[conexao]=False                 
+        else:
+            try:
+                data = recvline(socket_notificado)
+                if not data: 
+                    sockets_lista.remove(socket_notificado)
+                    mensagem = "/quit " + ''.join(lista_conexoes[socket_notificado]) + "\n"
+                    mensagem_para_todos(mensagem.encode())
+                    del lista_conexoes[socket_notificado]
+                    socket_notificado.close()
+                data = data.split()
+                if data[0] == "/nick":
+                    if data[1:data.__len__()].count(':') > 0 or data[1:data.__len__()].count(' ')>0 or data[1:data.__len__()] in lista_conexoes.values():
+                        socket_notificado.send(b"/error\n")
+                    else:
+                        if lista_conexoes[socket_notificado] == False:
+                            lista_conexoes[socket_notificado] = data[1:data.__len__()]
+                            mensagem = "/joined " + ''.join(lista_conexoes[socket_notificado]) + "\n"
+                            mensagem_para_todos(mensagem.encode())
+                        else:
+                            mensagem = "/renamed " + ''.join(lista_conexoes[socket_notificado]) + " "+ ''.join(data[1:data.__len__()]) +"\n"
+                            mensagem_para_todos(mensagem.encode())
+                            lista_conexoes[socket_notificado] = data[1:data.__len__()]
+                else:
+                    if lista_conexoes[socket_notificado] == False:
+                            socket_notificado.send(b"/error\n")
+                    else:
+                            mensagem = ''.join(lista_conexoes[socket_notificado]) + ": "+ ''.join(data) +"\n"
+                            mensagem_para_todos(mensagem.encode())
+            except:
+                continue 
+        
