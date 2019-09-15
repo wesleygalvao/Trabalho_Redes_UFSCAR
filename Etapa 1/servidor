@@ -15,11 +15,10 @@ s.listen(5)
 # Cria uma lista para sockets
 sockets_lista = [s]
 # Cria uma lista(dicionário) para demais conexões de outros clientes
-#lista_conexoes = {}
-# Socket aceita o pedido de cone
-#conexao, endereco = s.accept() 
 lista_conexoes = {}
+# Lista a ser usada no Passo 5 (AINDA NÃO USADA)
 lista_msgs = {}
+
 # Buffering 
 def recvline(conexao):
     buffer = ""
@@ -31,6 +30,7 @@ def recvline(conexao):
         if not data:
             return
 
+# Envia mensagem para todos os usuários conectados
 def mensagem_para_todos(mensagem):
     for sock in lista_conexoes:
         sock.send(mensagem)
@@ -38,39 +38,48 @@ def mensagem_para_todos(mensagem):
 while True:
     leitura_sockets, _, _ = select.select(sockets_lista, [], [])
     for socket_notificado in leitura_sockets:
-
+        # Há uma nova conexão pendente para ser aceita
         if socket_notificado == s:
             conexao, endereco = s.accept()
-            sockets_lista.append(conexao)    
+            sockets_lista.append(conexao) 
+            # Adiciona a nova conexão ao dicionário com valor False indicando que não foi definido o apelido (nick)   
             lista_conexoes[conexao]=False                 
         else:
             try:
                 data = recvline(socket_notificado)
+                # Indica que uma conexão foi fechada, removendo da lista de conexões ativas e enviando mensagem a todos do chat
                 if not data: 
                     sockets_lista.remove(socket_notificado)
                     mensagem = "/quit " + ''.join(lista_conexoes[socket_notificado]) + "\n"
                     mensagem_para_todos(mensagem.encode())
                     del lista_conexoes[socket_notificado]
                     socket_notificado.close()
+                # Divide a mensagem recebida para identificar se é um comando para criar/editar o nick ou mandar uma mensagem para o chat
                 data = data.split()
                 if data[0] == "/nick":
+                    # Verifica se o nick não possui os caracteres ':' ou ' ' e se já não existe um nick igual pertencente a outra conexão
                     if data[1:data.__len__()].count(':') > 0 or data[1:data.__len__()].count(' ')>0 or data[1:data.__len__()] in lista_conexoes.values():
                         socket_notificado.send(b"/error\n")
                     else:
+                        # Define um apelido para a conexão, avisando a todos do chat
                         if lista_conexoes[socket_notificado] == False:
                             lista_conexoes[socket_notificado] = data[1:data.__len__()]
                             mensagem = "/joined " + ''.join(lista_conexoes[socket_notificado]) + "\n"
                             mensagem_para_todos(mensagem.encode())
+                        # Renomeia o apelido para a conexão, avisando a todos do chat
                         else:
                             mensagem = "/renamed " + ''.join(lista_conexoes[socket_notificado]) + " "+ ''.join(data[1:data.__len__()]) +"\n"
                             mensagem_para_todos(mensagem.encode())
                             lista_conexoes[socket_notificado] = data[1:data.__len__()]
                 else:
+                    # Erro caso uma conexão tente enviar uma mensagem sem antes ter definido um apelido para si
                     if lista_conexoes[socket_notificado] == False:
                             socket_notificado.send(b"/error\n")
+                    # Uma mensagem é enviada a todos no chat
                     else:
                             mensagem = ''.join(lista_conexoes[socket_notificado]) + ": "+ ''.join(data) +"\n"
                             mensagem_para_todos(mensagem.encode())
             except:
                 continue 
         
+
