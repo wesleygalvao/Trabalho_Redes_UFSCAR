@@ -57,3 +57,4 @@ assert ack_no4 == seq_no + 1
 assert seq_no4 != seq_no2, 'O primeiro número de sequência usado em uma conexão deveria ser aleatório'
 assert flags4 & (FLAGS_SYN|FLAGS_ACK) == (FLAGS_SYN|FLAGS_ACK)
 assert flags4 & (FLAGS_FIN|FLAGS_RST) == 0
+print("finish")

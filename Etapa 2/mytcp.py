@@ -1,4 +1,5 @@
 import asyncio
+import random
 from mytcputils import *
 
 
@@ -34,6 +35,10 @@ class Servidor:
             conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao)
             # TODO: você precisa fazer o handshake aceitando a conexão. Escolha se você achar melhor
             # fazer aqui mesmo ou dentro da classe Conexao.
+            # Criado um número de sequência aleatório
+            seq_no1 = random.randint(0, 0xffff)
+            # Enviando SYN+ACK para aceitar conexão
+            self.rede.enviar( fix_checksum(make_header(self.porta, src_port, seq_no1,seq_no+1, FLAGS_SYN|FLAGS_ACK),dst_addr,src_addr),src_addr)
             if self.callback:
                 self.callback(conexao)
         elif id_conexao in self.conexoes:
@@ -49,7 +54,7 @@ class Conexao:
         self.servidor = servidor
         self.id_conexao = id_conexao
         self.callback = None
-        self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
+        #self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
 
     def _exemplo_timer(self):
