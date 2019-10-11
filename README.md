@@ -13,4 +13,6 @@
 
 ### Etapa 2
 
-- Passo 2: [Implementação do Go-Back-N](https://github.com/8tiqa/go-back-n-udp/blob/master/MyServer.py)
+- Passo 2:
+  - [Implementação do Go-Back-N](https://github.com/8tiqa/go-back-n-udp/blob/master/MyServer.py)
+  - [Implementação do Go-Back-N 2](https://github.com/prabhuvashwin/Computer-Networks)
