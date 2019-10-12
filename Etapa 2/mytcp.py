@@ -1,6 +1,7 @@
 import asyncio
 import random
 from mytcputils import *
+import math
 
 
 class Servidor:
@@ -65,6 +66,31 @@ class Conexao:
         # TODO: trate aqui o recebimento de segmentos provenientes da camada de rede.
         # Chame self.callback(self, dados) para passar dados para a camada de aplicação após
         # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
+        
+        ultimo_recebido = -1
+        primeiro_janela = 0
+     
+        while True:
+
+            try:
+                #Compara o checksum original do segmento com o checksum recebido. 
+                if self.calc_checksum(payload) == self.checksum:
+                    if self.seq_no == ultimo_recebido + 1:
+                        print("ACK enviado ao remetente") + str(self.seq_no)
+                        #TODO: Enviar ACK de confirmação
+                        ultimo_recebido = self.seq_no
+                    elif self.seq_no != ultimo_recebido + 1 and self.seq_no > ultimo_recebido + 1:
+                        #Verifica se o pacote está fora de ordem
+                        if ultimo_recebido >= 0:
+                            print("Pacote fora de ordem") + str(ultimo_recebido)
+                    #TODO: Verificar se está duplicado
+                    else:
+                        print("ACK enviado ao remetente") + str(self.seq_no)
+                        #TODO: Enviar ACK de confirmação
+                #Descarta o pacote se nenhuma condição for atendida        
+                else:
+                    print("Pacote descartado.")
+
         print('recebido payload: %r' % payload)
 
     # Os métodos abaixo fazem parte da API
