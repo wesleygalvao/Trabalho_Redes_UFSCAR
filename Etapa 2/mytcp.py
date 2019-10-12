@@ -39,6 +39,11 @@ class Servidor:
             # Criado um número de sequência aleatório
             if self.callback:
                 self.callback(conexao)
+        elif (flags & FLAGS_FIN) == FLAGS_FIN:
+            string=b''
+            self.conexoes[id_conexao].callback(self,string)
+            seq_no1 = random.randint(0, 0xffff)
+            self.rede.enviar( fix_checksum(make_header(self.porta, src_port,seq_no1,seq_no+1, FLAGS_ACK),dst_addr,src_addr),dst_addr)
         elif id_conexao in self.conexoes:
             # Passa para a conexão adequada se ela já estiver estabelecida
             self.conexoes[id_conexao]._rdt_rcv(ack_no,seq_no,flags,payload)
@@ -53,10 +58,11 @@ class Conexao:
         self.id_conexao = id_conexao
         self.seqnum = seq_no
         self.callback = None
-        seq_no1 = random.randint(0, 0xffff)
+        self.seq_no1 = random.randint(0, 0xffff)
+        self.nextseqnum = seq_no
         # Enviando SYN+ACK para aceitar conexão
-        self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], seq_no1,seq_no, FLAGS_SYN|FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
-        seq_no1+=1    
+        self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], self.seq_no1,seq_no, FLAGS_SYN|FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
+        self.seq_no1+=1    
         #self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
 
@@ -72,8 +78,6 @@ class Conexao:
             self.seqnum+= len(payload)
             self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], seq_no,self.seqnum, FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
             self.callback(self,payload)
-        else:
-            print("fora de ordem")
 
     # Os métodos abaixo fazem parte da API
 
@@ -91,11 +95,25 @@ class Conexao:
         # TODO: implemente aqui o envio de dados.
         # Chame self.servidor.rede.enviar(segmento, dest_addr) para enviar o segmento
         # que você construir para a camada de rede.
+        tam = len(dados)
+        i=0
+        while True: 
+            self.servidor.rede.enviar(fix_checksum(make_header(self.servidor.porta, self.id_conexao[1],
+                         self.seq_no1,self.seqnum, FLAGS_ACK)+dados[i*MSS:(i+1)*MSS],
+                self.id_conexao[2],self.id_conexao[0]),self.id_conexao[2])
+            self.seq_no1 += MSS 
+            i+=1
+            if tam<=MSS:
+                break
+            tam-=MSS
         pass
+    
 
     def fechar(self):
         """
         Usado pela camada de aplicação para fechar a conexão
         """
+        self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], self.seq_no1,self.nextseqnum, FLAGS_FIN),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
+            
         # TODO: implemente aqui o fechamento de conexão
         pass
