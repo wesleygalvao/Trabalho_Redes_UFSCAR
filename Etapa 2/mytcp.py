@@ -33,28 +33,30 @@ class Servidor:
         if (flags & FLAGS_SYN) == FLAGS_SYN:
             # A flag SYN estar setada significa que é um cliente tentando estabelecer uma conexão nova
             # TODO: talvez você precise passar mais coisas para o construtor de conexão
-            conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao)
+            conexao = self.conexoes[id_conexao] = Conexao(self, id_conexao,seq_no+1)
             # TODO: você precisa fazer o handshake aceitando a conexão. Escolha se você achar melhor
             # fazer aqui mesmo ou dentro da classe Conexao.
             # Criado um número de sequência aleatório
-            seq_no1 = random.randint(0, 0xffff)
-            # Enviando SYN+ACK para aceitar conexão
-            self.rede.enviar( fix_checksum(make_header(self.porta, src_port, seq_no1,seq_no+1, FLAGS_SYN|FLAGS_ACK),dst_addr,src_addr),src_addr)
             if self.callback:
                 self.callback(conexao)
         elif id_conexao in self.conexoes:
             # Passa para a conexão adequada se ela já estiver estabelecida
-            self.conexoes[id_conexao]._rdt_rcv(payload)
+            self.conexoes[id_conexao]._rdt_rcv(ack_no,seq_no,flags,payload)
         else:
             print('%s:%d -> %s:%d (pacote associado a conexão desconhecida)' %
                   (src_addr, src_port, dst_addr, dst_port))
 
 
 class Conexao:
-    def __init__(self, servidor, id_conexao):
+    def __init__(self, servidor, id_conexao,seq_no):
         self.servidor = servidor
         self.id_conexao = id_conexao
+        self.seqnum = seq_no
         self.callback = None
+        seq_no1 = random.randint(0, 0xffff)
+        # Enviando SYN+ACK para aceitar conexão
+        self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], seq_no1,seq_no, FLAGS_SYN|FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
+        seq_no1+=1    
         #self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
 
@@ -62,36 +64,16 @@ class Conexao:
         # Esta função é só um exemplo e pode ser removida
         print('Este é um exemplo de como fazer um timer')
 
-    def _rdt_rcv(self, payload):
+    def _rdt_rcv(self, seq_no, ack_no, flags, payload):
         # TODO: trate aqui o recebimento de segmentos provenientes da camada de rede.
         # Chame self.callback(self, dados) para passar dados para a camada de aplicação após
         # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
-        
-        ultimo_recebido = -1
-        primeiro_janela = 0
-     
-        while True:
-
-            try:
-                #Compara o checksum original do segmento com o checksum recebido. 
-                if self.calc_checksum(payload) == self.checksum:
-                    if self.seq_no == ultimo_recebido + 1:
-                        print("ACK enviado ao remetente") + str(self.seq_no)
-                        #TODO: Enviar ACK de confirmação
-                        ultimo_recebido = self.seq_no
-                    elif self.seq_no != ultimo_recebido + 1 and self.seq_no > ultimo_recebido + 1:
-                        #Verifica se o pacote está fora de ordem
-                        if ultimo_recebido >= 0:
-                            print("Pacote fora de ordem") + str(ultimo_recebido)
-                    #TODO: Verificar se está duplicado
-                    else:
-                        print("ACK enviado ao remetente") + str(self.seq_no)
-                        #TODO: Enviar ACK de confirmação
-                #Descarta o pacote se nenhuma condição for atendida        
-                else:
-                    print("Pacote descartado.")
-
-        print('recebido payload: %r' % payload)
+        if ack_no == self.seqnum:
+            self.seqnum+= len(payload)
+            self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], seq_no,self.seqnum, FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
+            self.callback(self,payload)
+        else:
+            print("fora de ordem")
 
     # Os métodos abaixo fazem parte da API
 
