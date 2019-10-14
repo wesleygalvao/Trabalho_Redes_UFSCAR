@@ -60,6 +60,7 @@ class Conexao:
         self.callback = None
         self.seq_no1 = random.randint(0, 0xffff)
         self.nextseqnum = seq_no
+        self.sendbase = seq_no
         # Enviando SYN+ACK para aceitar conexão
         self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], self.seq_no1,seq_no, FLAGS_SYN|FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
         self.seq_no1+=1    
@@ -73,13 +74,15 @@ class Conexao:
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
         # TODO: trate aqui o recebimento de segmentos provenientes da camada de rede.
         # Chame self.callback(self, dados) para passar dados para a camada de aplicação após
-        # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
-        if ack_no == self.seqnum:
+        # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.=
+        if ack_no == self.seqnum and len(payload) !=0:
             self.seqnum+= len(payload)
             self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], seq_no,self.seqnum, FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
             self.callback(self,payload)
-
-    # Os métodos abaixo fazem parte da API
+        #else: 
+         #   print("fim")
+          #  self.timer.cancel()
+        # Os métodos abaixo fazem parte da API
 
     def registrar_recebedor(self, callback):
         """
@@ -95,6 +98,7 @@ class Conexao:
         # TODO: implemente aqui o envio de dados.
         # Chame self.servidor.rede.enviar(segmento, dest_addr) para enviar o segmento
         # que você construir para a camada de rede.
+    
         tam = len(dados)
         i=0
         while True: 
@@ -102,13 +106,21 @@ class Conexao:
                          self.seq_no1,self.seqnum, FLAGS_ACK)+dados[i*MSS:(i+1)*MSS],
                 self.id_conexao[2],self.id_conexao[0]),self.id_conexao[2])
             self.seq_no1 += MSS 
-            i+=1
             if tam<=MSS:
                 break
-            tam-=MSS
+            i+=1
+            tam-=MSS        
+        self.nextseqnum+= len(dados)
+        #print("iniciado")
+        #self.timer = asyncio.get_event_loop().call_later(1, self.retransmit(dados))
         pass
     
-
+    def retransmit(self,dados):
+        tam = len(dados)
+        i=0
+            
+        
+        
     def fechar(self):
         """
         Usado pela camada de aplicação para fechar a conexão
