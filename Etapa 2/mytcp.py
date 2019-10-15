@@ -58,12 +58,14 @@ class Conexao:
         self.id_conexao = id_conexao
         self.seqnum = seq_no
         self.callback = None
-        self.seq_no1 = random.randint(0, 0xffff)
+        self.ack_no = random.randint(0, 0xffff)
         self.nextseqnum = seq_no
-        self.sendbase = seq_no
+        self.sendbase = self.ack_no
+        self.timer = None
+        self.buffer = {}
         # Enviando SYN+ACK para aceitar conexão
-        self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], self.seq_no1,seq_no, FLAGS_SYN|FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
-        self.seq_no1+=1    
+        self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], self.ack_no,seq_no, FLAGS_SYN|FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
+        self.ack_no+=1    
         #self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
 
@@ -74,14 +76,18 @@ class Conexao:
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
         # TODO: trate aqui o recebimento de segmentos provenientes da camada de rede.
         # Chame self.callback(self, dados) para passar dados para a camada de aplicação após
-        # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.=
+        # garantir que eles não sejam duplicados e que tenham sido recebidos em ordem.
         if ack_no == self.seqnum and len(payload) !=0:
             self.seqnum+= len(payload)
             self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], seq_no,self.seqnum, FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
             self.callback(self,payload)
-        #else: 
-         #   print("fim")
-          #  self.timer.cancel()
+        else: 
+            if seq_no>self.sendbase:
+                self.sendbase = seq_no
+                if ack_no<self.nextseqnum:
+                    self.timer = asyncio.get_event_loop().call_later(1, self.retransmit)
+                elif self.timer!=None:
+                    self.timer.cancel()
         # Os métodos abaixo fazem parte da API
 
     def registrar_recebedor(self, callback):
@@ -102,30 +108,36 @@ class Conexao:
         tam = len(dados)
         i=0
         while True: 
+            inic = i*MSS
+            fim = (i+1)*MSS
+            fim = fim
+            self.buffer[self.sendbase+i*MSS] = dados[inic:fim]
             self.servidor.rede.enviar(fix_checksum(make_header(self.servidor.porta, self.id_conexao[1],
-                         self.seq_no1,self.seqnum, FLAGS_ACK)+dados[i*MSS:(i+1)*MSS],
+                         self.ack_no,self.seqnum, FLAGS_ACK)+dados[i*MSS:(i+1)*MSS],
                 self.id_conexao[2],self.id_conexao[0]),self.id_conexao[2])
-            self.seq_no1 += MSS 
+            self.ack_no += MSS 
             if tam<=MSS:
                 break
             i+=1
             tam-=MSS        
         self.nextseqnum+= len(dados)
-        #print("iniciado")
-        #self.timer = asyncio.get_event_loop().call_later(1, self.retransmit(dados))
+        self.timer = asyncio.get_event_loop().call_later(1, self.retransmit)
         pass
     
-    def retransmit(self,dados):
-        tam = len(dados)
-        i=0
-            
+    def retransmit(self):
+        dados = self.buffer[self.sendbase]
+        self.servidor.rede.enviar(fix_checksum(make_header(self.servidor.porta, self.id_conexao[1],
+                         self.sendbase,self.seqnum, FLAGS_ACK)+dados,
+                self.id_conexao[2],self.id_conexao[0]),self.id_conexao[2])    
+                
+        self.timer = asyncio.get_event_loop().call_later(1, self.retransmit)
         
         
     def fechar(self):
         """
         Usado pela camada de aplicação para fechar a conexão
         """
-        self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], self.seq_no1,self.nextseqnum, FLAGS_FIN),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
+        self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], self.ack_no,self.nextseqnum, FLAGS_FIN),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
             
         # TODO: implemente aqui o fechamento de conexão
         pass
