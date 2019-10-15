@@ -59,7 +59,7 @@ class Conexao:
         self.seqnum = seq_no
         self.callback = None
         self.ack_no = random.randint(0, 0xffff)
-        self.nextseqnum = seq_no
+        self.nextseqnum = self.ack_no
         self.sendbase = self.ack_no
         self.timer = None
         self.buffer = {}
@@ -84,9 +84,10 @@ class Conexao:
         else: 
             if seq_no>self.sendbase:
                 self.sendbase = seq_no
-                if ack_no<self.nextseqnum:
+                if seq_no<self.nextseqnum:
                     self.timer = asyncio.get_event_loop().call_later(1, self.retransmit)
                 elif self.timer!=None:
+                    print("cancel")
                     self.timer.cancel()
         # Os métodos abaixo fazem parte da API
 
