@@ -2,6 +2,7 @@ import asyncio
 import random
 from mytcputils import *
 import math
+import time
 
 
 class Servidor:
@@ -63,6 +64,12 @@ class Conexao:
         self.sendbase = self.ack_no
         self.timer = None
         self.buffer = {}
+        self.sample_rtt = 0
+        self.estimated_rtt = 0
+        self.dev_rtt = 0
+        self.flag=0
+        self.timeout_interval = 1
+        self.timeBuffer = {}
         # Enviando SYN+ACK para aceitar conexão
         self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], self.ack_no,seq_no, FLAGS_SYN|FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
         self.ack_no+=1    
@@ -80,15 +87,30 @@ class Conexao:
         if ack_no == self.seqnum and len(payload) !=0:
             self.seqnum+= len(payload)
             self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], seq_no,self.seqnum, FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
-            self.callback(self,payload)
+            self.callback(self,payload)            
+            if seq_no>self.sendbase:
+                self.sendbase = seq_no
         else: 
             if seq_no>self.sendbase:
                 self.sendbase = seq_no
                 if seq_no<self.nextseqnum:
-                    self.timer = asyncio.get_event_loop().call_later(1, self.retransmit)
+                    self.timer = asyncio.get_event_loop().call_later(self.timeout_interval, self.retransmit)
                 elif self.timer!=None:
-                    print("cancel")
                     self.timer.cancel()
+                    self.timer = None
+                if self.flag==1:
+                    if self.timeBuffer[seq_no]!= False:
+                        self.sample_rtt = time.time() - self.timeBuffer[seq_no]
+                        if self.estimated_rtt==0:
+                            self.estimated_rtt=self.sample_rtt
+                            self.dev_rtt=self.sample_rtt/2
+                            self.timeout_interval =  self.estimated_rtt + 4*self.dev_rtt 
+                        else:
+                            self.dev_rtt =(0.75)*self.dev_rtt+ 0.25*abs(self.sample_rtt-self.estimated_rtt)
+                            
+                            self.estimated_rtt = (0.825)*self.estimated_rtt + 0.125*self.sample_rtt
+                            self.timeout_interval = self.estimated_rtt + 4*self.dev_rtt 
+                
         # Os métodos abaixo fazem parte da API
 
     def registrar_recebedor(self, callback):
@@ -108,11 +130,13 @@ class Conexao:
     
         tam = len(dados)
         i=0
+        self.flag=1
         while True: 
             inic = i*MSS
             fim = (i+1)*MSS
             fim = fim
             self.buffer[self.sendbase+i*MSS] = dados[inic:fim]
+            self.timeBuffer[self.sendbase+(i+1)*MSS] = time.time()
             self.servidor.rede.enviar(fix_checksum(make_header(self.servidor.porta, self.id_conexao[1],
                          self.ack_no,self.seqnum, FLAGS_ACK)+dados[i*MSS:(i+1)*MSS],
                 self.id_conexao[2],self.id_conexao[0]),self.id_conexao[2])
@@ -122,16 +146,18 @@ class Conexao:
             i+=1
             tam-=MSS        
         self.nextseqnum+= len(dados)
-        self.timer = asyncio.get_event_loop().call_later(1, self.retransmit)
+        if self.timer ==None:     
+            self.timer = asyncio.get_event_loop().call_later(self.timeout_interval, self.retransmit)
         pass
     
     def retransmit(self):
         dados = self.buffer[self.sendbase]
+        self.timeBuffer[self.sendbase+MSS] = False
         self.servidor.rede.enviar(fix_checksum(make_header(self.servidor.porta, self.id_conexao[1],
                          self.sendbase,self.seqnum, FLAGS_ACK)+dados,
                 self.id_conexao[2],self.id_conexao[0]),self.id_conexao[2])    
-                
-        self.timer = asyncio.get_event_loop().call_later(1, self.retransmit)
+        self.timer.cancel()
+        self.timer = asyncio.get_event_loop().call_later(self.timeout_interval, self.retransmit)
         
         
     def fechar(self):
