@@ -70,15 +70,12 @@ class Conexao:
         self.flag=0
         self.timeout_interval = 1
         self.timeBuffer = {}
+        self.winsize = 1
         # Enviando SYN+ACK para aceitar conexão
         self.servidor.rede.enviar( fix_checksum(make_header(self.servidor.porta, self.id_conexao[1], self.ack_no,seq_no, FLAGS_SYN|FLAGS_ACK),self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])
         self.ack_no+=1    
         #self.timer = asyncio.get_event_loop().call_later(1, self._exemplo_timer)  # um timer pode ser criado assim; esta linha é só um exemplo e pode ser removida
         #self.timer.cancel()   # é possível cancelar o timer chamando esse método; esta linha é só um exemplo e pode ser removida
-
-    def _exemplo_timer(self):
-        # Esta função é só um exemplo e pode ser removida
-        print('Este é um exemplo de como fazer um timer')
 
     def _rdt_rcv(self, seq_no, ack_no, flags, payload):
         # TODO: trate aqui o recebimento de segmentos provenientes da camada de rede.
@@ -90,10 +87,16 @@ class Conexao:
             self.callback(self,payload)            
             if seq_no>self.sendbase:
                 self.sendbase = seq_no
-        else: 
+            if seq_no == self.ack_no and self.flag==1:
+                self.winsize+=1
+                self.transmit()
+        else:                        
             if seq_no>self.sendbase:
                 self.sendbase = seq_no
                 if seq_no<self.nextseqnum:
+                    if self.timer != None:
+                        self.timer.cancel()
+                        self.timer = None
                     self.timer = asyncio.get_event_loop().call_later(self.timeout_interval, self.retransmit)
                 elif self.timer!=None:
                     self.timer.cancel()
@@ -110,7 +113,14 @@ class Conexao:
                             
                             self.estimated_rtt = (0.825)*self.estimated_rtt + 0.125*self.sample_rtt
                             self.timeout_interval = self.estimated_rtt + 4*self.dev_rtt 
-                
+                            
+            if seq_no == self.ack_no and self.flag==1:
+                self.winsize+=1 
+                if self.timer!=None:
+                    self.timer.cancel()
+                    self.timer = None
+                if seq_no<self.nextseqnum:
+                    self.transmit()
         # Os métodos abaixo fazem parte da API
 
     def registrar_recebedor(self, callback):
@@ -120,11 +130,25 @@ class Conexao:
         """
         self.callback = callback
 
+    def transmit(self):
+        for i in range(self.winsize):    
+            if self.sendbase+i*MSS in self.buffer:
+                self.timeBuffer[self.sendbase+(i+1)*MSS] = time.time()
+                self.servidor.rede.enviar(fix_checksum(make_header(self.servidor.porta, self.id_conexao[1],
+                             self.ack_no,self.seqnum, FLAGS_ACK)+self.buffer[self.sendbase+i*MSS],
+                    self.id_conexao[2],self.id_conexao[0]),self.id_conexao[2])                
+                self.ack_no += MSS 
+            else:
+                break      
+        if self.timer ==None: 
+            self.timer = asyncio.get_event_loop().call_later(self.timeout_interval, self.retransmit)
+            
+    
     def enviar(self, dados):
         """
         Usado pela camada de aplicação para enviar dados
         """
-        # TODO: implemente aqui o envio de dados.
+        # TO++DO: implemente aqui o envio de dados.
         # Chame self.servidor.rede.enviar(segmento, dest_addr) para enviar o segmento
         # que você construir para a camada de rede.
     
@@ -136,28 +160,24 @@ class Conexao:
             fim = (i+1)*MSS
             fim = fim
             self.buffer[self.sendbase+i*MSS] = dados[inic:fim]
-            self.timeBuffer[self.sendbase+(i+1)*MSS] = time.time()
-            self.servidor.rede.enviar(fix_checksum(make_header(self.servidor.porta, self.id_conexao[1],
-                         self.ack_no,self.seqnum, FLAGS_ACK)+dados[i*MSS:(i+1)*MSS],
-                self.id_conexao[2],self.id_conexao[0]),self.id_conexao[2])
-            self.ack_no += MSS 
             if tam<=MSS:
                 break
             i+=1
             tam-=MSS        
         self.nextseqnum+= len(dados)
-        if self.timer ==None:     
-            self.timer = asyncio.get_event_loop().call_later(self.timeout_interval, self.retransmit)
+        self.transmit()
         pass
     
-    def retransmit(self):
+    def retransmit(self):      
         dados = self.buffer[self.sendbase]
         self.timeBuffer[self.sendbase+MSS] = False
         self.servidor.rede.enviar(fix_checksum(make_header(self.servidor.porta, self.id_conexao[1],
                          self.sendbase,self.seqnum, FLAGS_ACK)+dados,
-                self.id_conexao[2],self.id_conexao[0]),self.id_conexao[2])    
+                self.id_conexao[2],self.id_conexao[0]),self.id_conexao[2])   
         self.timer.cancel()
-        self.timer = asyncio.get_event_loop().call_later(self.timeout_interval, self.retransmit)
+        self.timer = None
+        self.timer = asyncio.get_event_loop().call_later(self.timeout_interval, self.retransmit)  
+        self.winsize = self.winsize//2
         
         
     def fechar(self):
