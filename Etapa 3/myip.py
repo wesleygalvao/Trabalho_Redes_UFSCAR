@@ -66,4 +66,47 @@ class CamadaRede:
         next_hop = self._next_hop(dest_addr)
         # TODO: Assumindo que a camada superior é o protocolo TCP, monte o
         # datagrama com o cabeçalho IP, contendo como payload o segmento.
-        self.enlace.enviar(datagrama, next_hop)
+        def ipv4_header(size, src_addr, dest_addr, dscp, ecn, identification, 
+                        flags, frag_offset, ttl , proto, verify_checksum = False):
+            
+            # Internet Protocol Version
+            ip_version = 4 
+            ihl = 5
+            vihl = version | ihl
+
+            # Differentiate Servic Field
+            dscp = 0 
+            ecn  = 0
+            dscpecn = (dscp << 2) + ecn
+
+            # Total Length
+            total_length = 0
+
+            # Identification
+            identification = 54321
+                
+            # Flags
+            flag_rsv = 0
+            flag_dtf = 0
+            flag_mrf = 0
+            frag_offset = 0
+            flags = (flag_rsv << 7) + (flag_dtf << 6) + (flag_mrf << 5) + (frag_offset)          
+
+            # Time to Live
+            ttl = 255
+            # Protocol
+            proto = IPPROTO_TCP 
+            # Check Sum 
+            checksum = 0
+            # Source Address
+            src_addr = str2addr(src_addr)
+            # Destination Address
+            dest_addr = str2addr(dest_addr)
+            header = struct.pack('!BBHHHBBH', vihl, dscpecn, total_length, identification, flags, ttl, proto, checksum) + src_addr + dest_addr
+
+            if verify_checksum:
+                checksum = calc_checksum(header[:4*ihl])
+                header = struct.pack('!BBHHHBBH', vihl, dscpecn, total_length, identification, flags, ttl, proto, checksum) + src_addr + dest_addr
+
+            return header
+                self.enlace.enviar(datagrama, next_hop)
