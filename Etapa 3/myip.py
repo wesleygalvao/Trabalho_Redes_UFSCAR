@@ -37,9 +37,7 @@ class CamadaRede:
             dest+= '{0:08b}'.format(int(dest_addr[i]))
             
         encaminha = -1
-        maxPrefixo = 0
-        if len(self.tabela)==1:
-            return self.tabela[0][1]
+        maxPrefixo = -1
         for i in range(len(self.tabela)):
             endereco = self.tabela[i][0].split('/')
             num = endereco[1]
