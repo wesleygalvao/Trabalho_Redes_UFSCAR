@@ -96,7 +96,59 @@ class CamadaRede:
         Envia segmento para dest_addr, onde dest_addr é um endereço IPv4
         (string no formato x.y.z.w).
         """
-        next_hop = self._next_hop(dest_addr)
         # TODO: Assumindo que a camada superior é o protocolo TCP, monte o
         # datagrama com o cabeçalho IP, contendo como payload o segmento.
-        self.enlace.enviar(datagrama, next_hop)
+        def twos_comp(val, bits):
+            """compute the 2's complement of int value val
+            https://stackoverflow.com/questions/1604464/twos-complement-in-python"""
+            if (val & (1 << (bits - 1))) != 0: # if sign bit is set e.g., 8bit: 128-255
+                val = val - (1 << bits)        # compute negative value
+            return val                         # return positive value as is
+
+        def ipv4_header(size, src_addr, dest_addr, dscp, ecn, identification, 
+                        flags, frag_offset, ttl , proto, verify_checksum = False):
+            
+            # Internet Protocol Version
+            ip_version = 4 
+            ihl = 5
+            vihl = version | ihl
+
+            # Differentiate Servic Field
+            dscp = 0 
+            ecn  = 0
+            dscpecn = dscp | ecn
+
+            # Total Length
+            total_length = 0
+
+            # Identification
+            identification = twos_comp(randint(0, 2**16), 16)
+                
+            # Flags
+            flag_rsv = 0
+            flag_dtf = 0
+            flag_mrf = 0
+            frag_offset = 0
+            flags = (flag_rsv << 7) + (flag_dtf << 6) + (flag_mrf << 5) + (frag_offset)          
+
+            # Time to Live
+            ttl = 64
+            # Protocol
+            proto = IPPROTO_TCP 
+            # Check Sum 
+            checksum = 0
+            # Source Address
+            src_addr = str2addr(src_addr)
+            # Destination Address
+            dest_addr = str2addr(dest_addr)
+            header = struct.pack('!BBHHHBBH', vihl, dscpecn, total_length, identification, flags, ttl, proto, checksum) + src_addr + dest_addr
+
+            if verify_checksum:
+                checksum = twos_comp(calc_checksum(header[:4*ihl]), 16)
+                header = struct.pack('!BBHHHBBH', vihl, dscpecn, total_length, identification, flags, ttl, proto, checksum) + src_addr + dest_addr
+            return header
+        
+            next_hop = self._next_hop(dest_addr)
+            
+            datagrama = make_ipv4_header(len(segmento), self.meu_endereco, dest_addr) + segmento
+            self.enlace.enviar(datagrama, next_hop)
