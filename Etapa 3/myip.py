@@ -24,39 +24,61 @@ class CamadaRede:
         else:
             # atua como roteador
             next_hop = self._next_hop(dst_addr)
-            # TODO: Trate corretamente o campo TTL do datagrama
-            self.enlace.enviar(datagrama, next_hop)
-
+            
+            # Decrementa o valor de TTL
+            new_ttl = ttl - 1
+            vihl = 4<<4|5
+            dscpecn = dscp | ecn
+            total_length = 20+len(payload)            
+            src_addr = str2addr(src_addr)
+            dest_addr = str2addr(dst_addr)
+            # Cria um novo datagrama com o novo TTL
+            new_datagram = struct.pack('!BBHHHBBH', vihl, dscpecn, total_length, identification, flags, new_ttl, proto, 0) + src_addr + dest_addr
+            checksum = calc_checksum(new_datagram[:20])
+            new_datagram = struct.pack('!BBHHHBBH', vihl, dscpecn, total_length, identification, flags, new_ttl, proto, checksum) + src_addr + dest_addr
+            
+            if(new_ttl != 0):
+                self.enlace.enviar(new_datagram, next_hop)
+                
+            pass
+ 
     def _next_hop(self, dest_addr):
         # TODO: Use a tabela de encaminhamento para determinar o próximo salto
         # (next_hop) a partir do endereço de destino do datagrama (dest_addr).
         # Retorne o next_hop para o dest_addr fornecido.
+        
+        # Divide a string do endereço destino removendo o caracter . sobrando apenas os 4 números
         dest_addr = dest_addr.split('.')
         dest = ''
+        # Transforma os 4 números do endereço em binários de 8 bits cada e concatenando-os na string dest
         for i in range(4):
             dest+= '{0:08b}'.format(int(dest_addr[i]))
-            
+        
         encaminha = -1
         maxPrefixo = -1
+        # Lê cada linha da tabela para ver se há casamento, priorizando o de maior prefixo
         for i in range(len(self.tabela)):
             endereco = self.tabela[i][0].split('/')
             num = endereco[1]
             endereco = endereco[0]
             endereco = endereco.split('.')
             end = ''
+            # Mesma explicação do endereço destino para os endereços da tabela
             for j in range(4):
                 end+= '{0:08b}'.format(int(endereco[j]))
             maxPrefix=0
+            # Para cada linha da tabela verifica se há casamento com a entrada da tabela
             for k in range(int(num)):
                 if dest[k] == end[k]:
                     maxPrefix+=1
                 else:
                     break
+            # Se o prefixo for maior, atribui a nova entrada da tabela para encaminhamento
             if maxPrefix==int(num) and maxPrefix>maxPrefixo:
                 
                 maxPrefixo = maxPrefix
                 encaminha = i
-        
+        # Se não casou com nenhum, retorna None
         if encaminha==-1:
             return None
         else:
@@ -98,13 +120,6 @@ class CamadaRede:
         """
         # TODO: Assumindo que a camada superior é o protocolo TCP, monte o
         # datagrama com o cabeçalho IP, contendo como payload o segmento.
-        def twos_comp(val, bits):
-            """compute the 2's complement of int value val
-            https://stackoverflow.com/questions/1604464/twos-complement-in-python"""
-            if (val & (1 << (bits - 1))) != 0: # if sign bit is set e.g., 8bit: 128-255
-                val = val - (1 << bits)        # compute negative value
-            return val                         # return positive value as is
-
         def ipv4_header(size,src_addr,dest_addr):
             
             # Internet Protocol Version
@@ -140,7 +155,7 @@ class CamadaRede:
             src_addr = str2addr(src_addr)
             # Destination Address
             dest_addr = str2addr(dest_addr)
-            header = struct.pack('!BBHHHBBH', vihl, dscpecn, total_length, identification, 0, 64, proto, checksum) + src_addr + dest_addr
+            header = struct.pack('!BBHHHBBH', vihl, dscpecn, total_length, identification, flags, ttl, proto, checksum) + src_addr + dest_addr
             checksum = calc_checksum(header[:4*ihl])
             header = struct.pack('!BBHHHBBH', vihl, dscpecn, total_length, identification, flags, ttl, proto, checksum) + src_addr + dest_addr
             return header
