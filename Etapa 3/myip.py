@@ -105,7 +105,7 @@ class CamadaRede:
                 val = val - (1 << bits)        # compute negative value
             return val                         # return positive value as is
 
-        def make_ipv4_header(size,src_addr,dest_addr):
+        def ipv4_header(size,src_addr,dest_addr):
             
             # Internet Protocol Version
             ip_version = 4 << 4
@@ -146,5 +146,5 @@ class CamadaRede:
             return header
         
         next_hop = self._next_hop(dest_addr)
-        datagrama = make_ipv4_header(len(segmento),self.meu_endereco, dest_addr) + segmento
+        datagrama = ipv4_header(len(segmento),self.meu_endereco, dest_addr) + segmento
         self.enlace.enviar(datagrama, next_hop)
