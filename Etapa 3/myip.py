@@ -1,5 +1,5 @@
 from myiputils import *
-
+import random
 
 class CamadaRede:
     def __init__(self, enlace):
@@ -105,24 +105,23 @@ class CamadaRede:
                 val = val - (1 << bits)        # compute negative value
             return val                         # return positive value as is
 
-        def ipv4_header(size, src_addr, dest_addr, dscp, ecn, identification, 
-                        flags, frag_offset, ttl , proto, verify_checksum = False):
+        def make_ipv4_header(size,src_addr,dest_addr):
             
             # Internet Protocol Version
-            ip_version = 4 
+            ip_version = 4 << 4
             ihl = 5
-            vihl = version | ihl
+            vihl = ip_version | ihl
 
             # Differentiate Servic Field
-            dscp = 0 
+            dscp = 0 << 2
             ecn  = 0
             dscpecn = dscp | ecn
 
             # Total Length
-            total_length = 0
+            total_length = 20+size
 
             # Identification
-            identification = twos_comp(randint(0, 2**16), 16)
+            identification = random.randint(0, 2**16)
                 
             # Flags
             flag_rsv = 0
@@ -141,14 +140,11 @@ class CamadaRede:
             src_addr = str2addr(src_addr)
             # Destination Address
             dest_addr = str2addr(dest_addr)
+            header = struct.pack('!BBHHHBBH', vihl, dscpecn, total_length, identification, 0, 64, proto, checksum) + src_addr + dest_addr
+            checksum = calc_checksum(header[:4*ihl])
             header = struct.pack('!BBHHHBBH', vihl, dscpecn, total_length, identification, flags, ttl, proto, checksum) + src_addr + dest_addr
-
-            if verify_checksum:
-                checksum = twos_comp(calc_checksum(header[:4*ihl]), 16)
-                header = struct.pack('!BBHHHBBH', vihl, dscpecn, total_length, identification, flags, ttl, proto, checksum) + src_addr + dest_addr
             return header
         
-            next_hop = self._next_hop(dest_addr)
-            
-            datagrama = make_ipv4_header(len(segmento), self.meu_endereco, dest_addr) + segmento
-            self.enlace.enviar(datagrama, next_hop)
+        next_hop = self._next_hop(dest_addr)
+        datagrama = make_ipv4_header(len(segmento),self.meu_endereco, dest_addr) + segmento
+        self.enlace.enviar(datagrama, next_hop)
