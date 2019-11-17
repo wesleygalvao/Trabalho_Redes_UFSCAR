@@ -44,18 +44,21 @@ class CamadaRede:
 
                 icmp_type = 11
                 code = 0 # 0 Time-to-live exceeded | 1 Fragment reassembly time exceeded. 
-                header_checksum = calc_checksum(new_datagram[:20])
-                
-                icmp = struct.pack('!bbh', icmp_type, code, header_checksum) 
+                header_checksum = calc_checksum(new_datagram)
+                erro = ip_header + payload[:8]
+                unused = 0
+                                                
+                icmp = struct.pack('!bbhi', icmp_type, code, header_checksum, unused) + erro
                 return icmp
             
-            icmp = icmp_header(new_datagram, payload)
+            
+            icmp = icmp_header(new_datagram[:28], payload)
                                 
             if(new_ttl != 0):
                self.enlace.enviar(new_datagram, next_hop)
             elif(new_ttl == 0):
-               self.enlace.enviar(icmp, next_hop)                         
-
+               self.enlace.enviar(new_datagram[:28] + icmp, next_hop)    
+                          
             pass
  
     def _next_hop(self, dest_addr):
