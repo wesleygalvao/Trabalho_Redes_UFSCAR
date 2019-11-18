@@ -52,12 +52,12 @@ class CamadaRede:
                 return icmp
             
             
-            icmp = icmp_header(new_datagram[:28], payload)
+            icmp = icmp_header(new_datagram[20:], payload)
                                 
             if(new_ttl != 0):
                self.enlace.enviar(new_datagram, next_hop)
             elif(new_ttl == 0):
-               self.enlace.enviar(new_datagram[:28] + icmp, next_hop)    
+               self.enlace.enviar(icmp, next_hop)    
                           
             pass
  
