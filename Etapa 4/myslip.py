@@ -40,7 +40,7 @@ class Enlace:
     def __init__(self, linha_serial):
         self.linha_serial = linha_serial
         self.linha_serial.registrar_recebedor(self.__raw_recv)
-
+        self.listdatagrama = []
     def registrar_recebedor(self, callback):
         self.callback = callback
 
@@ -48,6 +48,18 @@ class Enlace:
         # TODO: Preencha aqui com o código para enviar o datagrama pela linha
         # serial, fazendo corretamente a delimitação de quadros e o escape de
         # sequências especiais, de acordo com o protocolo SLIP (RFC 1055).
+        strdatagrama = datagrama.decode('ISO-8859-1')
+        newstrdatagrama = ''
+        escapeparaxc0 = b'\xdb\xdc'
+        escapeparaxdb = b'\xdb\xdd'
+        for caractere in strdatagrama:
+            if caractere.encode('ISO-8859-1') == b'\xc0':
+                newstrdatagrama += escapeparaxc0.decode('ISO-8859-1')
+            elif caractere.encode('ISO-8859-1') == b'\xdb':
+                newstrdatagrama += escapeparaxdb.decode('ISO-8859-1')
+            else:
+                newstrdatagrama += caractere
+        self.linha_serial.enviar(b'\xc0' + newstrdatagrama.encode('ISO-8859-1') + b'\xc0')
         pass
 
     def __raw_recv(self, dados):
@@ -58,4 +70,26 @@ class Enlace:
         # vir quebrado de várias formas diferentes - por exemplo, podem vir
         # apenas pedaços de um quadro, ou um pedaço de quadro seguido de um
         # pedaço de outro, ou vários quadros de uma vez só.
+        strdados = dados.decode('ISO-8859-1')
+        bytexdb = b'\xdb'
+        bytexc0 = b'\xc0'
+        strdatagrama = ''
+        for caractere in strdados:
+            tamanho = len(self.listdatagrama)
+            if caractere.encode('ISO-8859-1') == b'\xc0' and tamanho > 0:
+                for ele in self.listdatagrama:
+                    strdatagrama += ele
+                self.callback(strdatagrama.encode('ISO-8859-1'))
+                self.listdatagrama.clear()
+                strdatagrama = ''
+            elif caractere.encode('ISO-8859-1') != b'\xc0':
+                if tamanho > 0:
+                    if self.listdatagrama[tamanho - 1].encode('ISO-8859-1') == b'\xdb' and caractere.encode('ISO-8859-1') == b'\xdd':
+                        self.listdatagrama[tamanho - 1] = bytexdb.decode('ISO-8859-1')
+                    elif self.listdatagrama[tamanho - 1].encode('ISO-8859-1') == b'\xdb' and caractere.encode('ISO-8859-1') == b'\xdc':
+                        self.listdatagrama[tamanho - 1] = bytexc0.decode('ISO-8859-1')
+                    else:
+                        self.listdatagrama.append(caractere)
+                else:
+                    self.listdatagrama.append(caractere)
         pass
