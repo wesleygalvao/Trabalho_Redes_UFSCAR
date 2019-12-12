@@ -27,6 +27,11 @@ class Servidor:
         if dst_port != self.porta:
             # Ignora segmentos que não são destinados à porta do nosso servidor
             return
+        
+        pseudohdr = str2addr(src_addr) + str2addr(dst_addr) + struct.pack('!HH', 0x0006, len(segment))
+        if calc_checksum(pseudohdr + segment) != 0:
+            print('descartando segmento com checksum incorreto')
+            return
 
         payload = segment[4*(flags>>12):]
         id_conexao = (src_addr, src_port, dst_addr, dst_port)
