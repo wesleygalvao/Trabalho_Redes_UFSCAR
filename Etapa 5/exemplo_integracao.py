@@ -3,7 +3,7 @@
 # o cliente tudo que for recebido em uma conexão.
 
 import asyncio
-from camadafisica import ZyboSerialDriver # Driver Zybo 
+from camadafisica import ZyboSerialDriver
 from mytcp import Servidor       # copie o arquivo da Etapa 2
 from myip import CamadaRede      # copie o arquivo da Etapa 3
 from myslip import CamadaEnlace  # copie o arquivo da Etapa 4
