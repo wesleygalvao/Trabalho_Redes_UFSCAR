@@ -1,3 +1,6 @@
+import binascii
+import traceback
+
 class CamadaEnlace:
     def __init__(self, linhas_seriais):
         """
@@ -29,6 +32,7 @@ class CamadaEnlace:
         responsabilizará por encontrar em qual enlace se encontra o next_hop.
         """
         # Encontra o Enlace capaz de alcançar next_hop e envia por ele
+        print('enviando ', binascii.hexlify(datagrama), 'para', next_hop)
         self.enlaces[next_hop].enviar(datagrama)
 
     def callback(self, datagrama):
@@ -48,18 +52,18 @@ class Enlace:
         # TODO: Preencha aqui com o código para enviar o datagrama pela linha
         # serial, fazendo corretamente a delimitação de quadros e o escape de
         # sequências especiais, de acordo com o protocolo SLIP (RFC 1055).
-        strdatagrama = datagrama.decode('ISO-8859-1')
-        newstrdatagrama = ''
+        strdatagrama = datagrama
+        newstrdatagrama = b''
         escapeparaxc0 = b'\xdb\xdc'
         escapeparaxdb = b'\xdb\xdd'
         for caractere in strdatagrama:
-            if caractere.encode('ISO-8859-1') == b'\xc0':
-                newstrdatagrama += escapeparaxc0.decode('ISO-8859-1')
-            elif caractere.encode('ISO-8859-1') == b'\xdb':
-                newstrdatagrama += escapeparaxdb.decode('ISO-8859-1')
+            if caractere == 0xc0:
+                newstrdatagrama += escapeparaxc0
+            elif caractere == 0xdb:
+                newstrdatagrama += escapeparaxdb
             else:
-                newstrdatagrama += caractere
-        self.linha_serial.enviar(b'\xc0' + newstrdatagrama.encode('ISO-8859-1') + b'\xc0')
+                newstrdatagrama += bytes([caractere])
+        self.linha_serial.enviar(b'\xc0' + newstrdatagrama + b'\xc0')
         pass
 
     def __raw_recv(self, dados):
@@ -70,26 +74,37 @@ class Enlace:
         # vir quebrado de várias formas diferentes - por exemplo, podem vir
         # apenas pedaços de um quadro, ou um pedaço de quadro seguido de um
         # pedaço de outro, ou vários quadros de uma vez só.
-        strdados = dados.decode('ISO-8859-1')
+        strdados = dados
         bytexdb = b'\xdb'
         bytexc0 = b'\xc0'
-        strdatagrama = ''
+        strdatagrama = b''
         for caractere in strdados:
             tamanho = len(self.listdatagrama)
-            if caractere.encode('ISO-8859-1') == b'\xc0' and tamanho > 0:
+            caractere = bytes([caractere])
+            #print('processando char', caractere, 'tamanho', tamanho)
+            if caractere == b'\xc0' and tamanho > 0:
                 for ele in self.listdatagrama:
                     strdatagrama += ele
-                self.callback(strdatagrama.encode('ISO-8859-1'))
+                print('slip recebeu', binascii.hexlify(strdatagrama))
+                try:
+                    self.callback(strdatagrama)
+                except:
+                    traceback.print_exc()
                 self.listdatagrama.clear()
-                strdatagrama = ''
-            elif caractere.encode('ISO-8859-1') != b'\xc0':
+                strdatagrama = b''
+            elif caractere != b'\xc0':
                 if tamanho > 0:
-                    if self.listdatagrama[tamanho - 1].encode('ISO-8859-1') == b'\xdb' and caractere.encode('ISO-8859-1') == b'\xdd':
-                        self.listdatagrama[tamanho - 1] = bytexdb.decode('ISO-8859-1')
-                    elif self.listdatagrama[tamanho - 1].encode('ISO-8859-1') == b'\xdb' and caractere.encode('ISO-8859-1') == b'\xdc':
-                        self.listdatagrama[tamanho - 1] = bytexc0.decode('ISO-8859-1')
+                    if self.listdatagrama[tamanho - 1] == b'\xdb' and caractere == b'\xdd':
+                        #print('escape valido para db')
+                        self.listdatagrama[tamanho - 1] = bytexdb
+                    elif self.listdatagrama[tamanho - 1] == b'\xdb' and caractere == b'\xdc':
+                        #print('escape valido para c0')
+                        self.listdatagrama[tamanho - 1] = bytexc0
+                    elif self.listdatagrama[tamanho - 1] == b'\xdb':
+                        print('AVISO: escape invalido recebido', caractere)
+                        self.listdatagrama[tamanho - 1] = caractere
                     else:
                         self.listdatagrama.append(caractere)
                 else:
                     self.listdatagrama.append(caractere)
-        pass
+                #print('listdatagrama', self.listdatagrama)

@@ -17,13 +17,18 @@ class CamadaRede:
     def __raw_recv(self, datagrama):
         dscp, ecn, identification, flags, frag_offset, ttl, proto, \
            src_addr, dst_addr, payload = read_ipv4_header(datagrama)
+        print('recebido datagrama ip destinado a', dst_addr)
         if dst_addr == self.meu_endereco:
+            print('(meu endereço), proto', proto, 'callback', self.callback)
             # atua como host
             if proto == IPPROTO_TCP and self.callback:
+                print('repassando para a camada superior')
                 self.callback(src_addr, dst_addr, payload)
         else:
             # atua como roteador
             next_hop = self._next_hop(dst_addr)
+
+            print('encaminhando datagrama para', next_hop)
             
             # Decrementa o valor de TTL
             new_ttl = ttl - 1

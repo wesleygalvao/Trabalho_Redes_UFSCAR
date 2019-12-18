@@ -48,7 +48,7 @@ class Servidor:
                 self.callback(conexao)
         elif (flags & FLAGS_FIN) == FLAGS_FIN:
             string=b''
-            self.conexoes[id_conexao].callback(self,string)
+            self.conexoes[id_conexao].callback(self.conexoes[id_conexao],string)
             seq_no1 = random.randint(0, 0xffff)
             self.rede.enviar( fix_checksum(make_header(self.porta, src_port,seq_no1,seq_no+1, FLAGS_ACK),dst_addr,src_addr),dst_addr)
         elif id_conexao in self.conexoes:
@@ -140,10 +140,11 @@ class Conexao:
         for i in range(self.winsize):    
             if self.sendbase+i*MSS in self.buffer:
                 self.timeBuffer[self.sendbase+(i+1)*MSS] = time.time()
+                print('tcp enviando para', self.id_conexao[0])
                 self.servidor.rede.enviar(fix_checksum(make_header(self.servidor.porta, self.id_conexao[1],
                              self.ack_no,self.seqnum, FLAGS_ACK)+self.buffer[self.sendbase+i*MSS],
-                    self.id_conexao[2],self.id_conexao[0]),self.id_conexao[2])                
-                self.ack_no += MSS 
+                    self.id_conexao[2],self.id_conexao[0]),self.id_conexao[0])                
+                self.ack_no += len(self.buffer[self.sendbase+i*MSS]) 
             else:
                 break      
         if self.timer ==None: 
